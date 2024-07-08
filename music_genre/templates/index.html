@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Genre Prediction</title>
+</head>
+<body>
+    <h1>Music Genre Prediction</h1>
+    
+    <audio id="audio" controls></audio>
+
+    <button id="recordButton">Record</button>
+
+    <div id="predictionResult"></div>
+
+    <script src="https://cdn.rawgit.com/mattdiamond/Recorderjs/08e7abd9/dist/recorder.js"></script>
+    <script>
+        var recordButton = document.getElementById('recordButton');
+        var audio = document.getElementById('audio');
+        var predictionResult = document.getElementById('predictionResult');
+
+        var recorder;
+
+        recordButton.addEventListener('click', startRecording);
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(stream) {
+                    audio.srcObject = stream;
+
+                    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    var input = audioContext.createMediaStreamSource(stream);
+                    recorder = new Recorder(input);
+
+                    recorder.record();
+
+                    recordButton.innerText = 'Stop Recording';
+                    recordButton.removeEventListener('click', startRecording);
+                    recordButton.addEventListener('click', stopRecording);
+                })
+                .catch(function(err) {
+                    console.error('Error getting user media:', err);
+                });
+        }
+
+        function stopRecording() {
+            recorder.stop();
+
+            recorder.exportWAV(function(blob) {
+                var reader = new FileReader();
+                reader.readAsDataURL(blob);
+
+                reader.onloadend = function() {
+                    var base64data = reader.result;
+                    sendAudioData(base64data);
+                };
+
+                recordButton.innerText = 'Record';
+                recordButton.removeEventListener('click', stopRecording);
+                recordButton.addEventListener('click', startRecording);
+            });
+        }
+
+        function sendAudioData(audioData) {
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'audio_data=' + audioData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.predicted_class !== null) {
+                    predictionResult.innerHTML = 'Predicted Genre: ' + data.predicted_class;
+                } else {
+                    predictionResult.innerHTML = 'Error predicting genre';
+                }
+            })
+            .catch(error => {
+                console.error('Error sending audio data:', error);
+            });
+        }
+    </script>
+</body>
+</html>
